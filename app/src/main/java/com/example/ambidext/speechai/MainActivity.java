@@ -14,17 +14,25 @@ import android.content.Intent;
 import android.speech.RecognizerIntent;
 import android.content.ActivityNotFoundException;
 
+import java.io.File;
+import java.io.UnsupportedEncodingException;
+import java.util.List;
 import java.util.Locale;
 import java.util.ArrayList;
+
+import kr.co.shineware.nlp.komoran.core.analyzer.Komoran;
+import kr.co.shineware.util.common.model.Pair;
+
 
 public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener
 {
     /* 변수 */
-    private TextView txtSpeechInput;
-    private Button btnSpeak;
+    private TextView txtSpeechInput, tvAnalysis;
+    private Button btnSpeak, btnTTS, btnAnalysis;
     private TextToSpeech tts;
-    private Button btnTTS;
     private final int REQ_CODE_SPEECH_INPUT = 100;
+    String name = null;
+    String amount = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -34,8 +42,10 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
         /* 컴포넌트 설정 */
         txtSpeechInput = (TextView) findViewById(R.id.txtSpeechInput);
+        tvAnalysis = (TextView) findViewById(R.id.tvAnalysis);
         btnSpeak = (Button) findViewById(R.id.btnSpeak);
         btnTTS = (Button) findViewById(R.id.btnTTS);
+        btnAnalysis = (Button) findViewById(R.id.btnAnalysis);
         tts = new TextToSpeech(this, this);
 
         /* SST 버튼 클릭시*/
@@ -54,17 +64,29 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             @Override
             public void onClick(View arg0)
             {
-                speakOut();
+                speakOut(tvAnalysis);
             }
 
         });
 
-        /*Komoran komoran = new Komoran("C:\\Users\\Jojangho\\Downloads\\Komoran\\models-full");
+        /* btnAnalysis 버튼 클릭시 */
+        btnAnalysis.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View view)
+            {
+                setKeyWord(tvAnalysis);
+            }
+        });
 
-        //List<List<Pair<String, String>>> result = komoran.analyze(txtSpeechInput.toString());
-        List<List<Pair<String, String>>> result = komoran.analyze("안녕");
+        File path = getApplicationContext().getFilesDir();
+        tvAnalysis.setText(path.toString());
 
-        for(List<Pair<String, String>> eojeolResult : result)
+        /*Komoran komoran = new Komoran("C:\\Users\\Jojangho\\Downloads\\SpeechAI\\models-full");
+
+        List<List<Pair<String,String>>> result = komoran.analyze("hello", 2);
+
+        for (List<Pair<String, String>> eojeolResult : result)
         {
             for (Pair<String, String> wordMorph : eojeolResult)
             {
@@ -72,7 +94,50 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             }
             System.out.println();
         }*/
-        
+    }
+
+    /*  */
+    public void setKeyWord(TextView tvAnalysis)
+    {
+        String input = txtSpeechInput.getText().toString();
+
+        name = input.substring(0, spaceCheck(input));
+        amount = input.substring(spaceCheck(input), spaceCheck(input) + 2);
+
+        tvAnalysis.setText(name + " " + amount + "개가 맞습니까?");
+
+        speakOut(tvAnalysis);
+
+        promptSpeechInput();
+    }
+
+    public int spaceCheck(String spaceCheck)
+    {
+        for(int i = 0 ; i < spaceCheck.length() ; i++)
+        {
+            if(spaceCheck.charAt(i) == ' ')
+                return i;
+        }
+        return 0;
+    }
+
+    public void corpusCheck()
+    {
+        ArrayList<CJSONParser.CData> corpusList = CJSONParser.GetInstance().getM_list();
+
+        for(int i = 0 ; i < corpusList.size() ; i++)
+        {
+            CJSONParser.CData corpusObj = corpusList.get(i);
+
+            if(name.equals(corpusObj.m_name))
+            {
+                if(Integer.parseInt(amount.trim()) < Integer.parseInt(corpusObj.m_amount))
+                {
+                    tvAnalysis.setText(name + " " + amount + "개 의 가격은 " + (Integer.parseInt(corpusObj.m_price) * Integer.parseInt(amount.trim())) + "원 입니다.");
+                    speakOut(tvAnalysis);
+                }
+            }
+        }
     }
 
     /* TTS 초기화 */
@@ -90,7 +155,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             else
             {
                 btnSpeak.setEnabled(true);
-                speakOut();
+                speakOut(tvAnalysis);
             }
         }
         else
@@ -100,9 +165,9 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     }
 
     /* TTS 실행 */
-    private void speakOut()
+    private void speakOut(TextView tvAnalysis)
     {
-        String text = txtSpeechInput.getText().toString();
+        String text = tvAnalysis.getText().toString();
 
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null);
     }
@@ -138,6 +203,12 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                 if (resultCode == RESULT_OK && null != data)
                 {
                     ArrayList<String> result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+
+                    if(result.get(0).equals("네"))
+                    {
+                        corpusCheck();
+                        break;
+                    }
                     txtSpeechInput.setText(result.get(0));
                 }
                 break;
